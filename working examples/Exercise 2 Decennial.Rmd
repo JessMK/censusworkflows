@@ -1,0 +1,342 @@
+---
+title: "Exercise 2"
+author: "JMK CBRUG"
+date: "2024-11-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### **Exercise 2: Accessing Decennial Census Data with `tidycensus`**
+**Objective:**
+- Retrieve population data from the Decennial Census.
+- Map the data geographically.
+**Steps:**
+1. **Retrieve total population data by county:**
+```{r}
+# Load additional packages
+library(sf)
+library(tigris)
+library(tidycensus)
+library(tidyverse)
+
+options(tigris_use_cache = TRUE)
+
+pop_data <- get_decennial(
+geography = "county",
+variables = "P1_001N", # Total population
+year = 2020,
+geometry = TRUE) %>% 
+  shift_geometry()
+```
+2. **Plot the data on a map:**
+```{r}
+pop_data %>%
+ggplot(aes(fill = value)) +
+geom_sf(color = NA) +
+scale_fill_viridis_c(option = "plasma") +
+labs(
+title = "Total Population by County (2020)",
+fill = "Population"
+) +
+theme_void()
+```
+**Notes:**
+- Variable `P1_001N` corresponds to the total population count.
+- The `geometry = TRUE` parameter fetches spatial data for mapping.
+_ The `shift_geometry()` function shifts the geometry to Census mapping standards.
+
+
+When mapping data like population by county, you often encounter a highly skewed distribution—a few counties have very high populations while the majority have much lower values. This can cause most counties to appear in similar (often dark) colors, making it difficult to discern differences among them.
+
+To address this, we can adjust the color gradient so that it highlights differences among counties despite the outliers. Here are several strategies you can use:
+
+1. **Apply a Logarithmic Transformation**: Transforming the population data using a logarithm can spread out the lower values and compress the higher values, making the differences among smaller populations more visible.
+
+2. **Use Quantile Binning**: Categorize the population data into quantiles (e.g., quintiles, deciles) and use a discrete color scale. This emphasizes relative differences among counties.
+
+3. **Modify the Color Scale Transformation**: Use a square root or other transformation in the color scale to adjust the distribution of colors.
+
+Below, I'll demonstrate how to implement these strategies in your code.
+
+---
+
+### **Option 1: Logarithmic Transformation of Population Values**
+
+Transform the population values before plotting to reduce the impact of outliers.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(viridis)
+
+pop_data %>%
+  mutate(log_value = log10(value)) %>%
+  ggplot(aes(fill = log_value)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(
+    option = "plasma",
+    name = "Log10(Population)",
+    labels = scales::comma_format()
+  ) +
+  labs(
+    title = "Total Population by County (2020)",
+    caption = "Data Source: U.S. Census Bureau"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+**Explanation:**
+
+- **`mutate(log_value = log10(value))`**: Adds a new column `log_value` with the base-10 logarithm of the population.
+- **`aes(fill = log_value)`**: Maps the logarithmically transformed population to the fill color.
+- **`scale_fill_viridis_c()`**: Adjusts the continuous color scale. The `labels = scales::comma_format()` ensures the legend labels are formatted with commas.
+- **`theme_void()`**: Provides a clean map without axes or grid lines.
+- **`theme(legend.position = "right")`**: Places the legend to the right of the map.
+
+**Benefit:**
+
+Using a log transformation distributes the population values more evenly, allowing variations among less populous counties to become visible.
+
+---
+
+### **Option 2: Use Quantile Binning**
+
+Group the population into quantiles and use a discrete color scale.
+
+```{r}
+library(classInt)
+library(RColorBrewer)
+library(ggplot2)
+library(dplyr)
+
+# Create quantile classes
+pop_data <- pop_data %>%
+  mutate(
+    pop_quantiles = cut(
+      value,
+      breaks = quantile(value, probs = seq(0, 1, 0.1), na.rm = TRUE),
+      include.lowest = TRUE
+    )
+  )
+
+# Plot using a discrete scale
+pop_data %>%
+  ggplot(aes(fill = pop_quantiles)) +
+  geom_sf(color = NA) +
+  scale_fill_brewer(
+    palette = "OrRd",
+    name = "Population Quantiles"
+  ) +
+  labs(
+    title = "Total Population by County (2020)",
+    caption = "Data Source: U.S. Census Bureau"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    legend.key.width = unit(2, "cm"),
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+**Explanation:**
+
+- **`cut()`**: Divides the population data into quantiles (here, deciles).
+- **`scale_fill_brewer()`**: Uses the ColorBrewer palette "OrRd" suitable for sequential data.
+- **`legend.key.width = unit(2, "cm")`**: Adjusts the width of the legend keys for better readability.
+
+**Benefit:**
+
+Quantile binning ensures each color represents an equal proportion of the data, enhancing the visibility of differences among counties.
+
+---
+
+### **Option 3: Adjust the Color Scale Transformation**
+
+Use a square root transformation in the color scale.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(viridis)
+
+pop_data %>%
+  ggplot(aes(fill = value)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(
+    option = "plasma",
+    trans = "sqrt",
+    name = "Population",
+    labels = scales::comma_format()
+  ) +
+  labs(
+    title = "Total Population by County (2020)",
+    caption = "Data Source: U.S. Census Bureau"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+**Explanation:**
+
+- **`trans = "sqrt"`**: Applies a square root transformation to the color scale.
+- This transformation is less aggressive than a logarithmic transformation but still helps to reduce the influence of outliers.
+
+**Benefit:**
+
+The square root transformation helps in better distributing the color gradient across the range of population values.
+
+---
+
+### **Option 4: Use Custom Breaks with the Color Scale**
+
+Define custom breaks focusing on the lower end of the data distribution.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(viridis)
+
+# Define custom breaks
+breaks <- c(0, 10000, 50000, 100000, 500000, 1000000, max(pop_data$value, na.rm = TRUE))
+
+pop_data %>%
+  ggplot(aes(fill = value)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(
+    option = "plasma",
+    name = "Population",
+    breaks = breaks,
+    labels = scales::comma_format(breaks)
+  ) +
+  labs(
+    title = "Total Population by County (2020)",
+    caption = "Data Source: U.S. Census Bureau"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+**Explanation:**
+
+- **`breaks`**: Defines specific breakpoints for the color scale.
+- **`labels = scales::comma_format(breaks)`**: Formats the legend labels to match the breaks.
+
+**Benefit:**
+
+Custom breaks allow you to focus the color differentiation in ranges where most data points lie.
+
+---
+
+### **Option 5: Exclude Outliers**
+
+Temporarily exclude the most populous counties to focus on the rest.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(viridis)
+
+# Determine the threshold for outliers (e.g., top 1%)
+threshold <- quantile(pop_data$value, 0.99, na.rm = TRUE)
+
+# Filter out the top 1% populous counties
+pop_data_filtered <- pop_data %>%
+  filter(value <= threshold)
+
+pop_data_filtered %>%
+  ggplot(aes(fill = value)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(
+    option = "plasma",
+    name = "Population",
+    labels = scales::comma_format()
+  ) +
+  labs(
+    title = "Total Population by County (2020)",
+    subtitle = "Excluding Top 1% Most Populous Counties",
+    caption = "Data Source: U.S. Census Bureau"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+**Explanation:**
+
+- **`filter(value <= threshold)`**: Removes counties with population above the 99th percentile.
+- The plot then focuses on the remaining 99% of counties.
+
+**Benefit:**
+
+By excluding extreme outliers, you can enhance the visibility of differences among the majority of counties.
+
+---
+
+### **Choosing the Right Strategy**
+
+- **Use Log Transformation** when you want to include all data but reduce the impact of high outliers.
+- **Quantile Binning** is useful when you want to show relative differences among data points.
+- **Adjusting the Color Scale Transformation** provides a middle ground, applying a non-linear transformation without changing the actual data.
+- **Custom Breaks** give you control over how colors are assigned based on specific values relevant to your analysis.
+- **Excluding Outliers** can be appropriate when outliers are not the focus of the analysis.
+
+---
+
+### **Additional Tips**
+
+- **Label Transformations Clearly**: When you transform data (e.g., logarithmic scale), make sure to indicate this in your legend and axis labels so the audience understands what is being presented.
+  
+- **Colorblind-Friendly Palettes**: Consider using palettes that are accessible to those with color vision deficiencies. The `viridis` package is designed with this in mind.
+  
+- **Interactive Visualization**: If feasible, consider using interactive visualization tools (e.g., `leaflet`, `plotly`) that allow users to hover over counties to see exact population values.
+
+---
+
+### **Finalized Code with Log Transformation (Recommended)**
+
+Here's the updated code applying a logarithmic transformation, which I'd recommend trying first:
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(viridis)
+library(scales)
+
+pop_data %>%
+  mutate(log_population = log10(value)) %>%
+  ggplot(aes(fill = log_population)) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(
+    option = "plasma",
+    name = "Log10(Population)",
+    labels = function(x) round(10^x)
+  ) +
+  labs(
+    title = "Total Population by County (2020)",
+    caption = "Data Source: U.S. Census Bureau",
+    fill = "Population"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+**Note on Labels**: The `labels` argument in `scale_fill_viridis_c()` uses a function to convert the log-transformed values back to original population values for the legend. This way, the legend displays actual population numbers, which is more intuitive.

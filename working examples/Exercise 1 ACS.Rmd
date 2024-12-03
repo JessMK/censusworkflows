@@ -1,0 +1,69 @@
+---
+title: "Exercise 1"
+author: "JMK CBRUG"
+date: "2024-11-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Exercise 1: Accessing American Community Survey (ACS) Data with `tidycensus`**
+
+**Objective:**
+
+- Retrieve demographic data from the ACS.
+- Perform basic data manipulation and visualization.
+
+**Steps:**
+1. **Install and load required packages:**
+```{r package}
+# Install packages if not already installed
+#install.packages(c("tidycensus", "tidyverse"), repos = "http://cran.us.r-project.org")
+
+# Load packages
+library(tidycensus)
+library(tidyverse)
+```
+
+2. **Set your API key for `tidycensus`:**
+```{r api key}
+# Set the API key (retrieved earlier)
+#census_api_key(census_api_key, install = TRUE, overwrite = TRUE)
+```
+
+3. **Retrieve median household income data by state:**
+```{r acs data}
+income_data <- get_acs(
+geography = "state",
+variables = "B19013_001", # Median household income
+year = 2023,
+survey = "acs5")
+```
+
+4. **Inspect the data:**
+```{r eda}
+head(income_data)
+```
+
+5. **Create a bar chart of median household income by state:**
+```{r}
+income_data %>%
+arrange(estimate) %>%
+mutate(NAME = factor(NAME, levels = NAME)) %>%
+ggplot(aes(x = NAME, y = estimate)) +
+geom_col(fill = "steelblue") +
+coord_flip() +
+labs(
+title = "Median Household Income by State (2023)",
+x = "State",
+y = "Median Household Income (USD)"
+) +
+theme_minimal()
+```
+
+**Notes:**
+- Variable `B19013_001` corresponds to median household income.
+- Data is retrieved for the year 2023 from the 5-year ACS estimates.
+
