@@ -23,7 +23,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # Load the package
 library(censusapi)
 
-census_key <- "1628931ba3a0a3e59ffe62387248b2f340e3c1e2"
+key <- "1628931ba3a0a3e59ffe62387248b2f340e3c1e2"
 ```
 
 2. **Retrieve population estimates:**
@@ -230,16 +230,78 @@ pep_long <- pep_wide %>%
   mutate(year = as.integer(year))
 
 
-pep_long %>%
-ggplot(aes(x = year, y = population)) +
-geom_point(color = "blue") +
-labs(
-title = "US Population Estimates Over Time",
-x = "Year",
-y = "Population"
-) +
-theme_minimal()
+ggplot(pep_long, aes(x = year, y = population)) +
+  geom_line(color = "darkblue") +
+  geom_point(color = "blue") +
+  labs(title = "US Population Estimates Over Time",
+       x = "Year",
+       y = "Population") +
+  theme_minimal()
+
 ```
 **Notes:**
 - The `pep/population` endpoint provides population estimates.
-- The `DATE_CODE` variable represents different time points.
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+
+# Sample Data Preparation (replace this with your actual data)
+# state_population_data <- your_data
+
+# 1. Plot: State-Wise Population Trends
+state_plot <- ggplot(pep_long, aes(x = year, y = population, color = state_name, group = state_name)) +
+  geom_line() +
+  labs(
+    title = "State-Wise Population Change Over Time",
+    x = "Year",
+    y = "Population",
+    color = "State"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none") # Hide legend if there are many states
+
+# 2. Plot: Total Population Change Over Time
+total_population_data <- pep_long %>%
+  group_by(year) %>%
+  summarize(total_population = sum(population))
+
+total_plot <- ggplot(total_population_data, aes(x = year, y = total_population)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "blue", size = 2) +
+  labs(
+    title = "Total Population Change Over Time",
+    x = "Year",
+    y = "Total Population"
+  ) +
+  theme_minimal()
+
+# 3. Plot: Regional Population Change Over Time
+regional_population_data <- pep_long %>%
+  group_by(region, year) %>%
+  summarize(region_population = sum(population))
+
+regional_plot <- ggplot(regional_population_data, aes(x = year, y = region_population, color = region, group = region)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Regional Population Change Over Time",
+    x = "Year",
+    y = "Population",
+    color = "Region"
+  ) +
+  theme_minimal()
+
+# Combine the three plots using patchwork
+combined_plot <- (state_plot / total_plot / regional_plot) +
+  plot_annotation(
+    title = "Population Trends Analysis",
+    subtitle = "State-wise, Total, and Regional Population Changes Over Time",
+    caption = "Data Source: Your Data"
+  )
+
+# Display the combined plot
+print(combined_plot)
+```

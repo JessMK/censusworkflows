@@ -13,57 +13,118 @@ knitr::opts_chunk$set(echo = TRUE)
 
 **Objective:**
 
-- Retrieve demographic data from the ACS.
-- Perform basic data manipulation and visualization.
+-   Retrieve demographic data from the ACS.
+-   Perform basic data manipulation and visualization.
 
-**Steps:**
-1. **Install and load required packages:**
+**Steps:** 1. **Install and load required packages:**
+
 ```{r package}
 # Install packages if not already installed
-#install.packages(c("tidycensus", "tidyverse"), repos = "http://cran.us.r-project.org")
+#install.packages(c("tidycensus", "tidyverse", "censusapi", "patchwork"), repos = "http://cran.us.r-project.org")
 
 # Load packages
 library(tidycensus)
 library(tidyverse)
+library(censusapi)
+library(patchwork)
 ```
 
-2. **Set your API key for `tidycensus`:**
+2.  **Set your API key for `tidycensus`:**
+
 ```{r api key}
 # Set the API key (retrieved earlier)
 #census_api_key(census_api_key, install = TRUE, overwrite = TRUE)
 ```
 
-3. **Retrieve median household income data by state:**
+3a. **Explore the available ACS endpoints:**
+
+```{r endpoints}
+apis <- listCensusApis()   # Get general information about available datasets
+
+head(apis, n = 21) # Look at acs/acs5 in 2023
+```
+
+3b. **Explore the available ACS variables:**
+
+```{r acs}
+acs5_23_var <- listCensusMetadata(     # Get metadata about a specified API endpoint
+  vintage = "2023",  
+  name = "acs/acs5",
+    type = "variables")
+
+head(acs5_23_var, n = 25)
+
+```
+
+4.  **Retrieve population and median household income data by state:**
+
 ```{r acs data}
 income_data <- get_acs(
 geography = "state",
-variables = "B19013_001", # Median household income
+variables = c("B01001_001", # Total population
+              "B19013_001"), # Median household income
 year = 2023,
-survey = "acs5")
+survey = "acs5") %>%
+  mutate(var = case_when(variable == "B01001_001" ~ "population",
+                         variable == "B19013_001" ~ "med hh income"))
 ```
 
-4. **Inspect the data:**
+5.  **Inspect the data:**
+
 ```{r eda}
 head(income_data)
+
+str(income_data)
+
+options(scipen = 999)  # disable scientific notation
+
+ggplot(income_data, aes(y = estimate)) +
+  geom_boxplot() +
+  facet_grid(rows = vars(var), scales = "free")
+
 ```
 
-5. **Create a bar chart of median household income by state:**
+5.  **Create a bar chart of median household income by state:**
+
 ```{r}
 income_data %>%
-arrange(estimate) %>%
-mutate(NAME = factor(NAME, levels = NAME)) %>%
+  filter(var == "med hh income") %>%
+  arrange(estimate) %>%
+  mutate(NAME = factor(NAME, levels = NAME)) %>%
 ggplot(aes(x = NAME, y = estimate)) +
-geom_col(fill = "steelblue") +
-coord_flip() +
-labs(
-title = "Median Household Income by State (2023)",
-x = "State",
-y = "Median Household Income (USD)"
-) +
-theme_minimal()
+    geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Median Household Income by State (2023)",
+        x = "State",
+        y = "Median Household Income (USD)") +
+  theme_minimal()
 ```
 
-**Notes:**
-- Variable `B19013_001` corresponds to median household income.
-- Data is retrieved for the year 2023 from the 5-year ACS estimates.
+6.  **Create a bar chart of median household income by state, using color to highlight population:**
 
+```{r}
+
+pop_data <- income_data %>%
+  filter(var == "population")
+
+
+income_data %>%
+  filter(var == "med hh income") %>%
+  arrange(estimate) %>%
+  mutate(NAME = factor(NAME, levels = NAME)) %>%
+ggplot(aes(x = NAME, y = estimate, fill = pop_data$estimate)) +
+    geom_col() +
+  coord_flip() +
+  labs(title = "Median Household Income by State (2023)",
+        x = "State",
+        y = "Median Household Income (USD)",
+        fill = "Population") +
+  theme_minimal()
+```
+
+
+
+**Notes:** 
+- Variable `B01001_001` corresponds to the estimated state population in 2023. 
+- Variable `B19013_001` corresponds to median household income. 
+- Data is retrieved for the year 2023 from the 5-year ACS estimates.
